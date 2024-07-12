@@ -1,26 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	"github.com/mkirl/capacitour/api"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/joho/godotenv"
 )
 
 func main() {
 	// Load .env file
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Printf("Error loading .env file: %v", err)
-		os.Exit(1)
-	}
-
-	// Load configuration
 	config, err := api.LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading configuration: %v", err)
@@ -34,11 +25,28 @@ func main() {
 	}
 } // <-- Added closing brace
 
+type Icon struct {
+	Type string `json:"type"`
+	Val  string `json:"val"`
+}
+
+type Space struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Icon  Icon   `json:"icon"`
+}
+
+type SpacesResponse struct {
+	Spaces []Space `json:"spaces"`
+}
+
 type model struct {
 	choices  []string
 	cursor   int
 	selected map[int]struct{}
 	loading  bool
+	config   *api.Config
+	spaces   []Space
 }
 
 func initialModel(config *api.Config) tea.Model {
@@ -47,40 +55,32 @@ func initialModel(config *api.Config) tea.Model {
 	m.cursor = 0
 	m.selected = make(map[int]struct{})
 	m.loading = true
-	go api.FetchData(config)
-	return m
+	m.config = config
+	m.spaces = []Space{}
+	return &m
 }
 
-func (m model) Init() tea.Cmd {
-	return nil
-}
-
-func sendToServer() tea.Msg {
-	url := os.Getenv("SERVER_URL")
-	if url == "" {
-		fmt.Println("SERVER_URL environment variable is not set")
-		return nil
-	}
-
-	resp, err := http.Get(url)
+func (m *model) Init() tea.Cmd {
+	spacesData, err := api.FetchSpacesData(m.config)
 	if err != nil {
-		fmt.Printf("Error sending request: %v", err)
+		fmt.Printf("Error fetching spaces data: %v", err)
 		return nil
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	var spacesResponse SpacesResponse
+	err = json.Unmarshal(spacesData, &spacesResponse)
 	if err != nil {
-		fmt.Printf("Error reading response body: %v", err)
+		fmt.Printf("Error unmarshalling spaces data: %v", err)
 		return nil
 	}
 
-	fmt.Printf("Response from server: %s", body)
+	m.spaces = append(m.spaces, spacesResponse.Spaces...)
+	fmt.Println(m.spaces[0].Title)
 
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -97,9 +97,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			_, ok := m.selected[m.cursor]
 			if ok {
-				if m.choices[m.cursor] == "Send to server" {
-					sendToServer()
-				}
 				delete(m.selected, m.cursor)
 			} else {
 				m.selected[m.cursor] = struct{}{}
@@ -110,8 +107,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
-	s := "Welcome to Capacitour?\n\n"
+func (m *model) View() string {
+	s := "Welcome to Capacitour\n\n"
 
 	for i, choice := range m.choices {
 		cursor := " "
