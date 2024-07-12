@@ -6,16 +6,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/mkirl/capacitour/api"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
 )
-
-type model struct {
-	choices  []string
-	cursor   int
-	selected map[int]struct{}
-	loading  bool
-}
 
 func main() {
 	// Load .env file
@@ -25,46 +20,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(initialModel())
+	// Load configuration
+	config, err := api.LoadConfig()
+	if err != nil {
+		fmt.Printf("Error loading configuration: %v", err)
+		os.Exit(1)
+	}
+
+	p := tea.NewProgram(initialModel(config))
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
+} // <-- Added closing brace
+
+type model struct {
+	choices  []string
+	cursor   int
+	selected map[int]struct{}
+	loading  bool
 }
 
-func initialModel() model {
-	m := model{
-		choices:  []string{"Loading..."},
-		selected: make(map[int]struct{}),
-		loading:  true,
-	}
-	go fetchData(&m)
+func initialModel(config *api.Config) tea.Model {
+	m := model{}
+	m.choices = []string{"Loading..."}
+	m.cursor = 0
+	m.selected = make(map[int]struct{})
+	m.loading = true
+	go api.FetchData(config)
 	return m
 }
 
-func fetchData(m *model) {
-	url := os.Getenv("SERVER_URL")
-	if url == "" {
-		fmt.Println("SERVER_URL environment variable is not set")
-		return
-	}
-
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Printf("Error sending request: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error reading response body: %v", err)
-		return
-	}
-
-	// Update the model with the fetched data
-	m.choices = []string{"Choice 1", "Choice 2", "Choice 3", string(body)}
-	m.loading = false
+func (m model) Init() tea.Cmd {
+	return nil
 }
 
 func sendToServer() tea.Msg {
@@ -89,10 +77,6 @@ func sendToServer() tea.Msg {
 
 	fmt.Printf("Response from server: %s", body)
 
-	return nil
-}
-
-func (m model) Init() tea.Cmd {
 	return nil
 }
 
