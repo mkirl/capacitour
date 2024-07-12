@@ -43,7 +43,6 @@ func FetchSpacesData(config *Config) ([]byte, error) {
 	}
 
 	// Print the raw response body for debugging
-	fmt.Println("Raw response body:", string(body))
 	// Marshal the data back to a pretty-printed JSON string
 	return body, nil
 }

@@ -51,7 +51,7 @@ type model struct {
 
 func initialModel(config *api.Config) tea.Model {
 	m := model{}
-	m.choices = []string{"Loading..."}
+	m.choices = []string{}
 	m.cursor = 0
 	m.selected = make(map[int]struct{})
 	m.loading = true
@@ -75,7 +75,10 @@ func (m *model) Init() tea.Cmd {
 	}
 
 	m.spaces = append(m.spaces, spacesResponse.Spaces...)
-	fmt.Println(m.spaces[0].Title)
+	for _, space := range m.spaces {
+		m.choices = append(m.choices, space.Title)
+	}
+	m.loading = false
 
 	return nil
 }
@@ -109,6 +112,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) View() string {
 	s := "Welcome to Capacitour\n\n"
+	if m.loading {
+		s += "Loading..."
+		return s
+	} else {
+		s += "Select a space to view its contents\n\n"
+	}
 
 	for i, choice := range m.choices {
 		cursor := " "
