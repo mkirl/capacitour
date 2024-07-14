@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/mkirl/capacitour/api"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
+var docStyle = lipgloss.NewStyle().Margin(1, 2)
+
 func main() {
-	// Load .env file
 	config, err := api.LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading configuration: %v", err)
@@ -23,7 +26,7 @@ func main() {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}
-} // <-- Added closing brace
+}
 
 type Icon struct {
 	Type string `json:"type"`
@@ -47,7 +50,16 @@ type model struct {
 	loading  bool
 	config   *api.Config
 	spaces   []Space
+	list     list.Model
 }
+
+type item struct {
+	title, desc string
+}
+
+func (i item) Title() string       { return i.title }
+func (i item) Description() string { return i.desc }
+func (i item) FilterValue() string { return i.title }
 
 func initialModel(config *api.Config) tea.Model {
 	m := model{}
@@ -57,6 +69,7 @@ func initialModel(config *api.Config) tea.Model {
 	m.loading = true
 	m.config = config
 	m.spaces = []Space{}
+	m.list = list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	return &m
 }
 
@@ -133,7 +146,13 @@ func (m *model) View() string {
 		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
 	}
 
-	s += "\nPress q to quit.\n"
+	items := []item{
+		{title: "Raspberry Pi's", desc: "I have 'em all over my house"},
+	}
 
-	return s
+	for _, itm := range items {
+		s += fmt.Sprintf("%s: %s\n", itm.Title(), itm.Description())
+	}
+
+	return docStyle.Render(items.View())
 }
