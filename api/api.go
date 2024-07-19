@@ -1,11 +1,27 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 )
+
+type Icon struct {
+	Type string `json:"type"`
+	Val  string `json:"val"`
+}
+
+type Space struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Icon  Icon   `json:"icon"`
+}
+
+type SpacesResponse struct {
+	Spaces []Space `json:"spaces"`
+}
 
 func FetchSpacesData(config *Config) ([]byte, error) {
 	// Build the URL
@@ -45,4 +61,19 @@ func FetchSpacesData(config *Config) ([]byte, error) {
 	// Print the raw response body for debugging
 	// Marshal the data back to a pretty-printed JSON string
 	return body, nil
+}
+
+func FetchSpaces(config *Config) ([]Space, error) {
+	body, err := FetchSpacesData(config)
+	if err != nil {
+		return nil, err
+	}
+
+	var spacesResponse SpacesResponse
+	err = json.Unmarshal(body, &spacesResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return spacesResponse.Spaces, nil
 }
