@@ -62,28 +62,24 @@ type errMsg struct{ err error }
 func (e errMsg) Error() string { return e.err.Error() }
 
 type model struct {
-	currentView string
-	err         error
-	config      api.Config
-	spaces      []api.Space
-	spinner     spinner.Model
-	list        list.Model
-	choice      string
-	quitting    bool
+	currentView   string
+	err           error
+	config        api.Config
+	spaces        []api.Space
+	spinner       spinner.Model
+	list          list.Model
+	choice        string
+	quitting      bool
+	selectedSpace api.Space
 }
 
 func initialModel() model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	selectedSpace := api.Space{}
 
-	items := []list.Item{
-		item{title: "WTF", desc: "Description for WTF"},
-		item{title: "Hello World", desc: "Description for Hello World"},
-		item{title: "Go Programming", desc: "Description for Go Programming"},
-		item{title: "Bubble Tea", desc: "Description for Bubble Tea"},
-		item{title: "API Integration", desc: "Description for API Integration"},
-	}
+	items := []list.Item{}
 
 	const defaultWidth = 20
 
@@ -96,9 +92,10 @@ func initialModel() model {
 	l.Styles.HelpStyle = helpStyle
 
 	return model{
-		currentView: "loading",
-		spinner:     s,
-		list:        l,
+		currentView:   "loading",
+		spinner:       s,
+		list:          l,
+		selectedSpace: selectedSpace,
 	}
 }
 
@@ -111,7 +108,7 @@ func (m model) Init() tea.Cmd {
 				return errMsg{err: err}
 			}
 			m.config = config
-			spaces, err := api.FetchSpaces(&m.config)
+			spaces, err := api.FetchAllSpaces(&m.config)
 			if err != nil {
 				return errMsg{err: err}
 			}
@@ -143,9 +140,12 @@ type spacesResponseMsg struct {
 	items  []list.Item
 }
 
+type spaceSelectedMsg struct {
+	space api.Space
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	m.spinner, cmd = m.spinner.Update(msg)
 
 	switch msg := msg.(type) {
 	case errMsg:
@@ -160,6 +160,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fmt.Println("Spaces loaded:", len(msg.spaces))
 		return m, nil
 
+	case spaceSelectedMsg:
+		m.selectedSpace = msg.space
+		m.currentView = "space"
+		return m, nil
+
 	case tea.KeyMsg:
 		switch keypress := msg.String(); keypress {
 		case "q", "ctrl+c":
@@ -170,7 +175,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ok {
 				m.choice = i.title
 			}
-			return m, tea.Quit
+			m.handleSpaceSelection(m.spaces[m.list.Index()])
+			return m, func() tea.Msg {
+				return spaceSelectedMsg{space: m.spaces[m.list.Index()]}
+			}
 		case "up", "k":
 			m.list.CursorUp()
 		case "down", "j":
@@ -186,6 +194,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
+func (m model) handleSpaceSelection(space api.Space) tea.Cmd {
+	spaceData, err := api.FetchSpace(&m.config, space)
+	if err != nil {
+		fmt.Println("Error fetching space:", err)
+		panic(err)
+	}
+	fmt.Println(string(spaceData))
+	return nil
+}
 
 func (m model) View() string {
 	if m.choice != "" {
@@ -199,11 +216,21 @@ func (m model) View() string {
 		return m.spinner.View()
 	case "spaces":
 		return docStyle.Render(m.list.View())
+	case "space":
+		return docStyle.Render(m.selectedSpace.Title)
 	}
 	return "Unknown view"
 }
 
 func main() {
+	if len(os.Getenv("DEBUG")) > 0 {
+		f, err := tea.LogToFile("./debug.log", "debug")
+		if err != nil {
+			fmt.Println("fatal:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+	}
 	m := initialModel()
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {

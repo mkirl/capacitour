@@ -23,7 +23,7 @@ type SpacesResponse struct {
 	Spaces []Space `json:"spaces"`
 }
 
-func FetchSpacesData(config *Config) ([]byte, error) {
+func FetchAllSpacesData(config *Config) ([]byte, error) {
 	// Build the URL
 	parsedURL, err := url.Parse(config.APIURL)
 	if err != nil {
@@ -63,8 +63,8 @@ func FetchSpacesData(config *Config) ([]byte, error) {
 	return body, nil
 }
 
-func FetchSpaces(config *Config) ([]Space, error) {
-	body, err := FetchSpacesData(config)
+func FetchAllSpaces(config *Config) ([]Space, error) {
+	body, err := FetchAllSpacesData(config)
 	if err != nil {
 		return nil, err
 	}
@@ -76,4 +76,44 @@ func FetchSpaces(config *Config) ([]Space, error) {
 	}
 
 	return spacesResponse.Spaces, nil
+}
+
+func FetchSpaceData(config *Config, space Space) ([]byte, error) {
+	parsedURL, err := url.Parse(config.APIURL)
+	if err != nil {
+		return nil, err
+	}
+	parsedURL.Path = parsedURL.Path + "/spaces-info"
+	query := parsedURL.Query()
+	query.Set("spaceid", space.ID)
+	parsedURL.RawQuery = query.Encode()
+	url := parsedURL.String()
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+config.APIToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func FetchSpace(config *Config, space Space) ([]byte, error) {
+	body, err := FetchSpaceData(config, space)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
